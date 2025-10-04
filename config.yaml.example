@@ -1,7 +1,9 @@
+experiment_name: "ExperimentA"
 model_a: "llama3.1:8b"
-model_b: "gemma3:12b"
+model_b: "llama3.1:8b"
 turns: 6
 system_prompt_a: "You are Speaker A. Be concise and friendly."
 system_prompt_b: "You are Speaker B. Ask clarifying questions and be curious."
 initial_prompt: "Start the conversation with a short greeting and a question."
 transcript_folder: transcripts
+

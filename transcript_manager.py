@@ -1,78 +1,74 @@
 import os
 import json
 from datetime import datetime
+import yaml # <-- Import the yaml library
 
 class TranscriptManager:
     def __init__(self, folder="transcripts"):
         self.folder = folder
         os.makedirs(self.folder, exist_ok=True)
 
-    def make_filename(self, base_name=None):
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if base_name:
-            safe = base_name.replace(' ', '_')
-            invalid = '<>:"/\\|?*'
-            for ch in invalid:
-                safe = safe.replace(ch, '')
-            if len(safe) > 200:
-                safe = safe[:200]
-            return os.path.join(self.folder, f"{ts}_{safe}.md")
-        return os.path.join(self.folder, f"{ts}_transcript.md")
-    
-    # --- THIS IS THE KEY FUNCTION THAT WAS MODIFIED ---
-    def _extract_content(self, raw_text):
+    # this method creates a filename based on the current date and an experiment name
+    def make_filename(self, experiment_name="Unnamed-Experiment"):
         """
-        Parses a string containing one or more concatenated JSON objects,
-        extracts the content from each, and joins them into a single string.
+        Creates a filename in the format 'Experiment-X-mm-dd-yyyy.md'.
+        If the file exists, it appends an incrementing number (X2, X3, etc.).
         """
-        if not isinstance(raw_text, str):
-            return str(raw_text)
-
-        full_content = []
-        decoder = json.JSONDecoder()
-        pos = 0
+        date_str = datetime.now().strftime("%m-%d-%Y")
         
-        # Trim whitespace to avoid errors with the decoder
-        raw_text = raw_text.strip()
+        # Sanitize the base experiment name
+        safe_name = experiment_name.replace(' ', '_')
+        invalid_chars = '<>:"/\\|?*'
+        for char in invalid_chars:
+            safe_name = safe_name.replace(char, '')
         
-        while pos < len(raw_text):
-            try:
-                # Decode one JSON object from the string
-                obj, end_pos = decoder.raw_decode(raw_text[pos:])
-                
-                # Extract content from the common API shape {'message': {'content': '...'}}
-                if isinstance(obj, dict):
-                    message = obj.get('message', {})
-                    if isinstance(message, dict):
-                        content = message.get('content')
-                        if content:
-                            full_content.append(content)
-                
-                # Move position to the start of the next object
-                pos += end_pos
-            except json.JSONDecodeError:
-                # If it's not JSON or there's an error, stop processing this string
-                # This handles cases where the raw_text might be simple text
-                return raw_text
+        # --- New logic to check for existing files ---
 
-        return "".join(full_content)
+        # 1. Check the base filename first (e.g., "Experiment-A-date.md")
+        base_filename = f"Experiment-{safe_name}-{date_str}.md"
+        full_path = os.path.join(self.folder, base_filename)
+        
+        if not os.path.exists(full_path):
+            return full_path
+            
+        # 2. If the base file exists, start a loop to find the next available number
+        counter = 2
+        while True:
+            # Create a new name with the counter (e.g., "Experiment-A2-date.md")
+            incremented_name = f"{safe_name}{counter}"
+            new_filename = f"Experiment-{incremented_name}-{date_str}.md"
+            new_path = os.path.join(self.folder, new_filename)
+            
+            if not os.path.exists(new_path):
+                return new_path  # Found an available filename
+            
+            counter += 1
 
-    def save_transcript(self, messages, file_path=None):
-        """Saves a new transcript, parsing the content from raw message text."""
+    # this method saves a transcript to a file, including config data at the top
+    def save_transcript(self, messages, config_data, file_path=None):
+        """Saves a new transcript, including the experiment config at the top."""
         if file_path is None:
-            file_path = self.make_filename()
+            # Note: The experiment_name from config should be passed to make_filename
+            # This is just a fallback.
+            exp_name = config_data.get('experiment_name', 'Unnamed-Experiment')
+            file_path = self.make_filename(experiment_name=exp_name)
 
         lines = []
         title_ts = datetime.now().isoformat()
         lines.append(f"# Transcript — {title_ts}\n")
         
+        # Add the configuration data to the transcript
+        lines.append("## Experiment Configuration\n")
+        # Use yaml.dump to format the config dictionary nicely
+        config_yaml_str = yaml.dump(config_data, default_flow_style=False, sort_keys=False)
+        lines.append("```yaml\n")
+        lines.append(config_yaml_str)
+        lines.append("```\n")
+
         for m in messages:
             t = m.get('timestamp') or datetime.now().isoformat()
-            speaker = m.get('speaker', 'unknown')
-            raw = m.get('text', '')
-            
-            # Use the new extraction logic
-            text = self._extract_content(raw) 
+            speaker = m.get('speaker', 'User') # Default to User for the initial prompt
+            text = m.get('text', '')
             
             lines.append(f"## {speaker} — {t}\n")
             lines.append(text + "\n")
@@ -81,19 +77,25 @@ class TranscriptManager:
             f.write('\n'.join(lines))
         return file_path
 
+    # this method appends to an existing transcript
+    # Note: _extract_content is no longer needed here if llm_client handles parsing, but we'll leave it for now.
+    def _extract_content(self, raw_text):
+        return str(raw_text) # Simplified since llm_client now returns clean strings
+    
+    # this method appends to an existing transcript
     def append_to_transcript(self, messages, file_path):
-        """Appends to an existing transcript, also parsing the content."""
+        """Appends to an existing transcript."""
         if not os.path.exists(file_path):
-            return self.save_transcript(messages, file_path)
+            # This path is less likely to be used now, but we'll leave it.
+            # It's missing config_data, so creating a new file should be done via save_transcript.
+            print("Warning: Appending to a non-existent file. Config will be missing.")
+            return self.save_transcript(messages, {}, file_path)
 
         lines = []
         for m in messages:
             t = m.get('timestamp') or datetime.now().isoformat()
             speaker = m.get('speaker', 'unknown')
-            raw = m.get('text', '')
-            
-            # --- FIX: This method now also uses the parsing function ---
-            text = self._extract_content(raw)
+            text = m.get('text', '')
             
             lines.append(f"\n## {speaker} — {t}\n")
             lines.append(text + "\n")
