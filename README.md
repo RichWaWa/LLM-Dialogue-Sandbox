@@ -1,16 +1,20 @@
-LLMSnitch — two local LLMs talking via Ollama
+LLM Dialogue Sandbox — orchestrate, transcribe, and analyze LLM-to-LLM conversations
 
-Overview
+## Overview
 
-This project runs two locally-hosted LLMs (via ollama) and has them talk to each other while transcribing the conversation to a readable file.
+LLM Dialogue Sandbox is a Python framework designed for orchestrating, transcribing, and analyzing dialogues between two Large Language Models (LLMs). It serves as an experimental sandbox to study emergent behaviors, conversational patterns, and the influence of external information on AI interactions. The primary goal of this project is to provide a simple yet powerful tool for researchers, developers, and enthusiasts to explore how LLMs converse with each other.
 
-Features
-- Start two LLMs locally using Ollama (you must have Ollama installed and models available).
-- Run the two models talking to each other for N turns.
-- Save transcripts in markdown format (timestamped files under `transcripts/`).
-- `--dry-run` mode that doesn't contact Ollama (useful for testing).
+Future development will focus on enhancing the ability to manually inject specific context into either agent during a conversation, allowing for targeted experiments on influence and reasoning.
 
-Quick start (Windows PowerShell)
+## Features
+
+- Orchestrate a back-and-forth conversation between two models (local Ollama models by default).
+- Command-line runner with configurable experiment name, model names, turn count, history truncation, and transcript output.
+- Dry-run mode that uses a mock client for fast testing without contacting Ollama.
+- Saves readable, timestamped markdown transcripts under the `transcripts/` folder by default.
+- Simple character-based history truncation (configurable); easy to extend to token-based truncation.
+
+## Quick start (Windows PowerShell)
 
 1. Create a virtual environment and activate it:
 
@@ -24,7 +28,7 @@ python -m venv .venv; .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
-3. Run the conversation (dry run):
+3. Run a dry-run conversation (no Ollama calls):
 
 ```powershell
 python run.py --dry-run --turns 4
@@ -36,44 +40,49 @@ python run.py --dry-run --turns 4
 python run.py --model-a llama2 --model-b vicuna --turns 10 --transcript transcripts/session.md
 ```
 
-History management and truncation
+## CLI reference
 
-Long conversations can cause the message history to grow without bound. This project provides a simple character-based truncation flag to control how much of the previous model output is appended to the other model's input.
+The main runner is `run.py`. Relevant flags (and defaults) are:
 
-- No truncation (default):
+- `--config` (default: `config.yaml`) — path to YAML config file.
+- `--experiment-name` (default: from config or `Experiment`) — name used in generated transcript filenames.
+- `--model-a` — model name for speaker A (overrides config).
+- `--model-b` — model name for speaker B (overrides config).
+- `--turns` (int) — number of turns to run (overrides config; default in config or 6).
+- `--history-max-chars` (int, default 0) — if >0, truncate appended previous messages to this many characters per message (0 = unlimited).
+- `--transcript` — path to save the transcript (Markdown). If omitted, a timestamped file is created under `transcripts/`.
+- `--dry-run` — do not contact Ollama; use mock replies instead (useful for testing).
 
-```powershell
-python run.py --dry-run --turns 6
-```
+The YAML config (default `config.yaml`) can set:
 
-- Limit appended history to the last 1000 characters:
+- `experiment_name`, `model_a`, `model_b`, `turns`, `system_prompt_a`, `system_prompt_b`, `initial_prompt`, `transcript_folder`, `history_max_chars`.
 
-```powershell
-python run.py --dry-run --turns 20 --history-max-chars 1000
-```
+## Important implementation notes
 
-- Real run with history limit (example):
+- `run.py` contains the CLI and conversation loop. It builds message lists for each agent, calls the LLM client, and appends assistant replies as new user input for the other model.
+- `llm_client.py` is a thin wrapper that calls Ollama when available and returns deterministic/mock responses when `--dry-run` is enabled.
+- `transcript_manager.py` handles creation of timestamped filenames and saving transcripts (it expects a list of message dicts with `speaker`, `text`, and `timestamp`).
+- By default the project assumes Ollama is reachable at `http://localhost:11434`; change `llm_client.py` if your setup differs.
 
-```powershell
-python run.py --model-a llama2 --model-b vicuna --turns 50 --history-max-chars 2000 --transcript transcripts/session.md
-```
+## History truncation and tokens
 
-Why transcripts looked truncated before
+Current truncation is character-based (`history_max_chars`). This is simple but imperfect because characters != tokens. For long-running experiments consider switching to token-budget truncation (for example using `tiktoken`) — the codebase is structured so this can be added in `run.py` or inside the client.
 
-Earlier versions of the dry-run helper returned only the first 200 characters of the last message; that caused subsequent messages to be built from truncated input and made the transcript appear to "run out". The dry-run mock has been updated to return the full message content. Note that when using a real LLM, truncation can still happen if you intentionally limit history or if you parse only part of the model's response.
+## Files
 
-Token-based truncation (recommended)
-
-Character-based truncation is a simple option but not ideal because tokens and characters don't map 1:1. For robust long-running conversations consider token-budget truncation (keep the last N tokens) using a tokenizer such as `tiktoken`. If you'd like, I can add token-based truncation with a per-model token budget and unit tests.
-
-Files
-- `run.py` — main runner/CLI.
-- `llm_client.py` — small Ollama client wrapper with a dry-run fallback.
-- `transcript_manager.py` — utilities to write transcripts.
+- `run.py` — main runner/CLI and conversation loop.
+- `llm_client.py` — Ollama client wrapper with a dry-run fallback.
+- `transcript_manager.py` — utilities for generating filenames and writing transcripts.
 - `config.yaml.example` — example configuration.
-- `requirements.txt` — dependencies.
+- `requirements.txt` — Python dependencies.
+- `transcripts/` — folder where transcripts are saved.
 
-Notes
-- This project assumes Ollama is exposed on `http://localhost:11434`. If your Ollama API differs or requires the CLI, update `llm_client.py` accordingly.
+## Future work
 
-License: MIT
+- Manual injection of targeted context into either agent mid-run (controlled experiments on influence).
+- Token-aware truncation and per-model token budgets.
+- Better experiment metadata and structured transcript formats (JSON/Parquet) for analysis.
+
+## License
+
+MIT
