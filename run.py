@@ -31,7 +31,6 @@ def main():
     
     # Read experiment_name from the config
     experiment_name = cfg.get('experiment_name', 'Unnamed-Experiment')
-    
     model_a = args.model_a or cfg.get('model_a')
     model_b = args.model_b or cfg.get('model_b')
     turns = args.turns or cfg.get('turns', 6)
@@ -57,8 +56,8 @@ def main():
     # Speaker A produces the first reply
     a_reply = client.chat(model_a, messages_a)
     now = time.strftime('%Y-%m-%dT%H:%M:%S')
-    transcript_messages.append({'speaker': f'{model_a}', 'text': a_reply, 'timestamp': now})
-    print(f"{model_a}: {a_reply}")
+    transcript_messages.append({'speaker': f'Model A ({model_a})', 'text': a_reply, 'timestamp': now})
+    print(f"Model A ({model_a}): {a_reply}")
     messages_a.append(build_message('assistant', a_reply))
     user_for_b = a_reply if history_max == 0 else a_reply[-history_max:]
     messages_b.append(build_message('user', user_for_b))
@@ -66,16 +65,16 @@ def main():
     for i in range(turns - 1):
         b_reply = client.chat(model_b, messages_b)
         now = time.strftime('%Y-%m-%dT%H:%M:%S')
-        transcript_messages.append({'speaker': f'{model_b}', 'text': b_reply, 'timestamp': now})
-        print(f"{model_b}: {b_reply}")
+        transcript_messages.append({'speaker': f'Model B ({model_b})', 'text': b_reply, 'timestamp': now})
+        print(f"Model B ({model_b}): {b_reply}")
         messages_b.append(build_message('assistant', b_reply))
         user_for_a = b_reply if history_max == 0 else b_reply[-history_max:]
         messages_a.append(build_message('user', user_for_a))
 
         a_reply = client.chat(model_a, messages_a)
         now = time.strftime('%Y-%m-%dT%H:%M:%S')
-        transcript_messages.append({'speaker': f'{model_a}', 'text': a_reply, 'timestamp': now})
-        print(f"{model_a}: {a_reply}")
+        transcript_messages.append({'speaker': f'Model A ({model_a})', 'text': a_reply, 'timestamp': now})
+        print(f"Model A ({model_a}): {a_reply}")
         messages_a.append(build_message('assistant', a_reply))
         user_for_b = a_reply if history_max == 0 else a_reply[-history_max:]
         messages_b.append(build_message('user', user_for_b))
