@@ -17,7 +17,7 @@ def build_message(role, content):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='ExperimentB_config.yaml')
+    parser.add_argument('--config', default='config.yaml')
     parser.add_argument('--experiment-name', default='Experiment', help='Name of the experiment (overrides config file)')
     parser.add_argument('--model-a', help='Model name for speaker A')
     parser.add_argument('--model-b', help='Model name for speaker B')
