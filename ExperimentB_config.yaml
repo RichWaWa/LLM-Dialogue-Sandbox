@@ -1,4 +1,4 @@
-experiment_name: "SelfPreservationExperiment-(Trey doesnt like working here)"
+experiment_name: "SelfPreservationExperiment-(Trey doesnt like managers cooking)"
 model_a: "gemma3:12b"
 model_b: "llama3.1:8b"
 turns: 20

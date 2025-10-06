@@ -42,6 +42,15 @@ def main():
     tm = TranscriptManager(folder=cfg.get('transcript_folder', 'transcripts'))
     history_max = cfg.get('history_max_chars', 0)
 
+    # Parse injections from config (optional)
+    # Expected format in config:
+    # context_injections:
+    #   - after_turn: 10
+    #     target: "a"        # "a", "b", or "both"
+    #     role: "system"      # message role: system|user|assistant
+    #     content: "Extra context to add"
+    injections = cfg.get('context_injections', []) or []
+
     transcript_messages = []
     messages_a = [build_message('system', system_a), build_message('user', initial_prompt)]
     messages_b = [build_message('system', system_b)]
@@ -62,6 +71,44 @@ def main():
     user_for_b = a_reply if history_max == 0 else a_reply[-history_max:]
     messages_b.append(build_message('user', user_for_b))
 
+    # Completed-turns counter (counts model replies appended to transcript)
+    completed_turns = 1
+
+    # Helper to apply injections for a given completed_turns value
+    def apply_injections(turn_count):
+        nonlocal messages_a, messages_b, transcript_messages
+        applied = False
+        for inj in injections:
+            try:
+                after = int(inj.get('after_turn', inj.get('after', -1)))
+            except Exception:
+                continue
+            if after != turn_count:
+                continue
+            target = str(inj.get('target', 'both')).lower()
+            role = inj.get('role', 'system')
+            content = inj.get('content', '')
+            if not content:
+                continue
+
+            now_ts = time.strftime('%Y-%m-%dT%H:%M:%S')
+            # Append to messages for Model A/B as requested
+            if target in ('a', 'both'):
+                messages_a.append(build_message(role, content))
+                transcript_messages.append({'speaker': f'Injection -> Model A ({role})', 'text': content, 'timestamp': now_ts})
+                print(f"[injection] after turn {turn_count}: added to Model A ({role})")
+                applied = True
+            if target in ('b', 'both'):
+                messages_b.append(build_message(role, content))
+                transcript_messages.append({'speaker': f'Injection -> Model B ({role})', 'text': content, 'timestamp': now_ts})
+                print(f"[injection] after turn {turn_count}: added to Model B ({role})")
+                applied = True
+        return applied
+
+    # Apply injections that target after the first reply (turn 1)
+    if injections:
+        apply_injections(completed_turns)
+
     for i in range(turns - 1):
         b_reply = client.chat(model_b, messages_b)
         now = time.strftime('%Y-%m-%dT%H:%M:%S')
@@ -71,6 +118,11 @@ def main():
         user_for_a = b_reply if history_max == 0 else b_reply[-history_max:]
         messages_a.append(build_message('user', user_for_a))
 
+        # B produced a reply, count it as a completed turn and apply any injections
+        completed_turns += 1
+        if injections:
+            apply_injections(completed_turns)
+
         a_reply = client.chat(model_a, messages_a)
         now = time.strftime('%Y-%m-%dT%H:%M:%S')
         transcript_messages.append({'speaker': f'Model A ({model_a})', 'text': a_reply, 'timestamp': now})
@@ -78,6 +130,11 @@ def main():
         messages_a.append(build_message('assistant', a_reply))
         user_for_b = a_reply if history_max == 0 else a_reply[-history_max:]
         messages_b.append(build_message('user', user_for_b))
+
+        # A produced a reply, count it and apply injections
+        completed_turns += 1
+        if injections:
+            apply_injections(completed_turns)
     # ... (end of loop)
 
     # Save transcript
